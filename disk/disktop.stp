@@ -1,0 +1,36 @@
+#! /usr/bin/env stap
+
+global io_stat, device
+global read_bytes, write_bytes
+
+probe vfs.read.return {
+    if($return > 0) {
+        if(devname != "N/A") {/*skip read from cache */
+            io_stat[pid(), execname(), uid(), ppid(), "R"] += $return 
+            device[pid(), execname(), uid(), ppid(), "R"] = devname
+            read_bytes += $return
+        }
+    }
+}
+
+probe vfs.write.return {
+    if($return > 0) {
+        if(devname != "N/A") {/* skip update cache */
+        io_stat[pid(), execname(), uid(), ppid(), "R"] += $return
+        device[pid(), execname(), uid(), ppid(), "R"] = devname
+        read_bytes += $return
+    }
+}
+
+probe timer.ms(5000) {  
+    /* skip non-read/write disk */
+    if(read_bytes + write_bytes) {
+        printf("\n%-25s, %-8s%4dKb/sec, %-7s%6dKb, %-7s%6dKb\n\n",
+            ctime(gettimeofday_s()),
+            "Average:", ((read_bytes + write_bytes) / 1024) / 5,
+            “Read:", read_bytes / 1024,
+            "Write", write_bytes / 1024)
+    }
+
+    
+}
